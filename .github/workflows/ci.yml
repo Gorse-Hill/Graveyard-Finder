@@ -3,8 +3,7 @@
 #   1. Flutter: pub get, analyze, test on the mobile app.
 #   2. SQL: Postgres 16 service, ci/supabase_stubs.sql, migrations 0001-0005, then the four SQL check files.
 #   3. Deno: deno check on every Edge Function, deno test on the shared validators.
-# The repository ships as project.zip at the repo root; each job unzips it first so that
-# backend/, ci/, and mobile/ appear at the root for the subsequent steps.
+# The repository root holds backend/, ci/, and mobile/ directly (see backend/README.md).
 
 name: ci
 
@@ -21,9 +20,6 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
-
-      - run: unzip -q project.zip
-        working-directory: .
 
       - uses: subosito/flutter-action@v2
         with:
@@ -56,8 +52,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: unzip -q project.zip
-
       - name: Apply Supabase stubs and migrations 0001-0005
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ci/supabase_stubs.sql
@@ -82,9 +76,6 @@ jobs:
         working-directory: backend/supabase/functions
     steps:
       - uses: actions/checkout@v4
-
-      - run: unzip -q project.zip
-        working-directory: .
 
       - uses: denoland/setup-deno@v2
         with:
