@@ -1,0 +1,32 @@
+name: graveyard_locator
+description: Graveyard Locator mobile app, first slice (Save a Grave, Family Card).
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  uuid: ^4.4.0
+  geolocator: ^12.0.0
+  image_picker: ^1.1.2
+  qr_flutter: ^4.1.0
+  http: ^1.2.2
+  crypto: ^3.0.3
+  url_launcher: ^6.3.0
+  path_provider: ^2.1.4
+  mobile_scanner: ^5.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo.png
