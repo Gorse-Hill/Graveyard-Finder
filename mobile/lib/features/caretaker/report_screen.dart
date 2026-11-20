@@ -47,8 +47,9 @@ class _ReportScreenState extends State<ReportScreen> {
         return null;
       }
       return await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      ).timeout(const Duration(seconds: 15));
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
+      );
     } catch (_) {
       return null;
     }

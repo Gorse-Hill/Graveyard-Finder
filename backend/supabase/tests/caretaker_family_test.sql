@@ -16,6 +16,7 @@ declare
   report2 uuid := '70000000-0000-4000-8000-0000000000b2';
   r jsonb;
   v_status text;
+  v_rid uuid;
 begin
   insert into public.devices (device_id, token_hash) values (dev, 'h-b1'), (dev2, 'h-b2');
   insert into public.cemeteries (id, name) values (cemetery, 'Test cemetery');
@@ -60,16 +61,17 @@ begin
   end if;
 
   -- 5. A report is not visible until it is published.
-  select status into v_status from public.condition_reports where id = report;
-  if v_status <> 'received' then
+  -- The server gives the stored report its own id. The phone's id is client_report_id.
+  select id, status into v_rid, v_status from public.condition_reports where client_report_id = report;
+  if v_status is distinct from 'received' then
     raise exception 'check 5 failed: status = %', v_status;
   end if;
-  r := public.publish_condition_report(report);
+  r := public.publish_condition_report(v_rid);
   if r->>'result' <> 'applied' then
     raise exception 'check 5 failed: %', r;
   end if;
-  select status into v_status from public.condition_reports where id = report;
-  if v_status <> 'published' then
+  select status into v_status from public.condition_reports where id = v_rid;
+  if v_status is distinct from 'published' then
     raise exception 'check 5 failed: status after publish = %', v_status;
   end if;
 
