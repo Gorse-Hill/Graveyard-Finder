@@ -1,0 +1,63 @@
+name: ci
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: unzip -q project.zip -d work
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: |
+          cd work/mobile
+          flutter create --platforms=android --project-name graveyard_locator .
+          rm -f test/widget_test.dart
+          flutter pub get
+          flutter analyze
+          flutter test
+
+  sql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: unzip -q project.zip -d work
+      - run: |
+          cd work
+          psql -v ON_ERROR_STOP=1 -f ci/supabase_stubs.sql
+          for f in backend/supabase/migrations/*.sql; do echo "== $f"; psql -v ON_ERROR_STOP=1 -f "$f"; done
+          for f in backend/supabase/tests/*.sql; do echo "== $f"; psql -v ON_ERROR_STOP=1 -f "$f"; done
+
+  deno:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: unzip -q project.zip -d work
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: |
+          cd work/backend/supabase/functions
+          deno check */index.ts
+          deno test --allow-read _shared/
