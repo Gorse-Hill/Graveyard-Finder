@@ -1,39 +1,30 @@
-# Graveyard Locator CI.
-# Three jobs on every push, as described in backend/README.md "Running everything on GitHub":
-#   1. Flutter: pub get, analyze, test on the mobile app.
-#   2. SQL: Postgres 16 service, ci/supabase_stubs.sql, migrations 0001-0005, then the four SQL check files.
-#   3. Deno: deno check on every Edge Function, deno test on the shared validators.
-# The repository root holds backend/, ci/, and mobile/ directly (see backend/README.md).
-
 name: ci
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   flutter:
-    name: Flutter (pub get, analyze, test)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
-
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-
+      # The repo holds lib, test, assets and pubspec. This adds the Android project around them.
+      - run: flutter create --platforms=android --project-name graveyard_locator .
+      - run: rm -f test/widget_test.dart
       - run: flutter pub get
-
       - run: flutter analyze
-
       - run: flutter test
 
   sql:
-    name: SQL (migrations and checks on Postgres 16)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -43,61 +34,43 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
     steps:
       - uses: actions/checkout@v4
-
-      - name: Apply Supabase stubs and migrations 0001-0005
+      - name: Supabase stand-ins (roles and storage tables)
+        run: psql -v ON_ERROR_STOP=1 -f ci/supabase_stubs.sql
+      - name: Migrations
         run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ci/supabase_stubs.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/supabase/migrations/0001_core_tables.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/supabase/migrations/0002_sync_push.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/supabase/migrations/0003_photos.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/supabase/migrations/0004_caretaker_family.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/supabase/migrations/0005_report_by_token.sql
-
-      - name: Run the SQL checks
+          for f in backend/supabase/migrations/*.sql; do
+            echo "== $f"
+            psql -v ON_ERROR_STOP=1 -f "$f"
+          done
+      - name: SQL checks
         run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/supabase/tests/sync_push_test.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/supabase/tests/photo_slot_test.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/supabase/tests/caretaker_family_test.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/supabase/tests/report_by_token_test.sql
+          for f in backend/supabase/tests/*.sql; do
+            echo "== $f"
+            psql -v ON_ERROR_STOP=1 -f "$f"
+          done
 
   deno:
-    name: Deno (check functions, test validators)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend/supabase/functions
     steps:
       - uses: actions/checkout@v4
-
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-
-      # Type-checks every Edge Function. The npm:@supabase/supabase-js@2 specifier
-      # is resolved by Deno itself on the first run.
-      - name: deno check on every function
-        run: |
-          deno check sync-batch/index.ts \
-                      device-register/index.ts \
-                      photo-upload-url/index.ts \
-                      photo-confirm/index.ts \
-                      device-link/index.ts \
-                      admin-actions/index.ts \
-                      family-grave/index.ts
-
-      # The shared validators use node:test imports, which the Deno test runner
-      # supports. --no-check skips a second type pass; the check step above already
-      # type-checked the code under test.
-      - name: deno test on the shared validators
-        run: |
-          deno test --no-check _shared/validate.test.ts \
-                               _shared/photo_validate.test.ts \
-                               _shared/caretaker_validate.test.ts
+      - name: Type check every function
+        run: deno check */index.ts
+      - name: Unit tests
+        run: deno test --allow-read _shared/

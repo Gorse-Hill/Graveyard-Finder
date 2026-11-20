@@ -78,23 +78,54 @@ create table if not exists public.sync_log (
   entity_id uuid not null,
   op text not null,
   entity_version integer not null,
-  result text not null,
+  result text not null check (result in ('applied', 'conflict', 'rejected')),
   reason text,
+  payload jsonb not null,
   received_at timestamptz not null default now(),
   unique (device_id, client_event_id)
 );
 
--- Append-only audit of every change the sync function applies.
-create table if not exists public.audit_log (
-  id bigint generated always as identity primary key,
-  device_id uuid,
+-- A stale edit that did not apply. An admin resolves it (admin route, sprint 6).
+create table if not exists public.sync_conflicts (
+  id uuid primary key default gen_random_uuid(),
+  sync_log_id bigint not null references public.sync_log(id),
   entity text not null,
   entity_id uuid not null,
-  op text not null,
-  before_json jsonb,
-  after_json jsonb,
+  incoming jsonb not null,
+  current_version integer not null,
+  status text not null default 'open' check (status in ('open', 'resolved')),
+  resolution text,
+  resolved_by uuid,
+  resolved_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+-- Append only. Triggers reject updates and deletes.
+create table if not exists public.audit_log (
+  id bigint generated always as identity primary key,
+  actor_device_id uuid,
+  actor_user_id uuid,
+  action text not null,
+  entity text not null,
+  entity_id uuid,
+  before jsonb,
+  after jsonb,
+  created_at timestamptz not null default now()
+);
+
+create or replace function public.reject_audit_change()
+returns trigger
+language plpgsql
+as $$
+begin
+  raise exception 'audit_log is append only';
+end;
+$$;
+
+drop trigger if exists audit_log_no_change on public.audit_log;
+create trigger audit_log_no_change
+  before update or delete on public.audit_log
+  for each row execute function public.reject_audit_change();
 
 alter table public.cemeteries enable row level security;
 alter table public.devices enable row level security;
@@ -102,20 +133,5 @@ alter table public.graves enable row level security;
 alter table public.caretaker_assignments enable row level security;
 alter table public.condition_reports enable row level security;
 alter table public.sync_log enable row level security;
+alter table public.sync_conflicts enable row level security;
 alter table public.audit_log enable row level security;
-
--- The audit log is append-only. The trigger blocks updates and deletes.
-create or replace function public.audit_log_append_only()
-returns trigger
-language plpgsql
-as $$
-begin
-  raise exception 'audit_log is append-only';
-end;
-$$;
-
-create trigger audit_log_no_update
-before update or delete on public.audit_log
-for each row execute function public.audit_log_append_only();
-
-revoke all on public.audit_log from public, anon, authenticated;
