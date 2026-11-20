@@ -45,8 +45,8 @@ class FamilyReport {
 
 /// Reads the family-grave response. Missing location parts stay null.
 FamilyGrave parseFamilyGrave(Map<String, dynamic> json) {
-  final location = (json['location'] as Map<String, dynamic>?) ?? const {};
-  final coordinates = (json['coordinates'] as Map<String, dynamic>?) ?? const {};
+  final location = (json['location'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
+  final coordinates = (json['coordinates'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
   final photos = (json['photos'] as List<dynamic>? ?? const []).map((raw) {
     final m = raw as Map<String, dynamic>;
     return FamilyPhoto(id: m['id'] as String, url: m['url'] as String);
