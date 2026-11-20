@@ -76,7 +76,7 @@ jobs:
         run: deno test --allow-read _shared/
 
   android:
-    name: Android (release build)
+    name: Android (debug build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -107,4 +107,6 @@ jobs:
 
       - run: flutter pub get
 
-      - run: flutter build apk --release
+      # A release build stops in Android lint inside the image_picker plugin (a crash in lint itself),
+      # so CI builds the debug APK, which compiles the whole app and every plugin.
+      - run: flutter build apk --debug
