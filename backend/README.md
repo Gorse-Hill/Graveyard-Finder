@@ -1,67 +1,98 @@
-# Graveyard Locator backend
+# Graveyard Finder backend
 
-Supabase project: Postgres, Auth, Storage, and Edge Functions. This folder holds the sync path (sprint 3).
+Supabase Postgres, Auth, private Storage, and Deno Edge Functions for Graveyard Finder. The app can save locally without this backend; these services add synchronization, remote family views, caretaker OTP/device linking, and admin operations.
 
-## Files
+## Migrations
 
-| Path | What it does |
+Apply every file in `supabase/migrations/` in filename order.
+
+| Migration | Purpose |
 |---|---|
-| `supabase/migrations/0001_core_tables.sql` | Core tables, the audit log, and the append-only trigger. Row level security is on with no policies. |
-| `supabase/migrations/0002_sync_push.sql` | `sync_push` and the per-entity apply functions. Each event runs in its own sub-transaction. |
-| `supabase/tests/sync_push_test.sql` | Seven database checks: create, duplicate, newer update, stale conflict, unknown entity, duplicate QR token, audit log. |
-| `supabase/functions/device-register/index.ts` | Issues a 32-byte device token once. Stores only its SHA-256 hash. |
-| `supabase/functions/sync-batch/index.ts` | Checks the device token, validates the batch, and calls `sync_push` with the service role key. |
-| `supabase/functions/_shared/validate.ts` | Batch validation: at most 50 events, a 1 MB body limit, UUID checks, allowed entity and operation pairs, note length. |
-| `supabase/functions/_shared/validate.test.ts` | Ten unit tests for validation. |
-| `supabase/migrations/0003_photos.sql` | Photo table, the private `grave-photos` bucket, and `create_photo_slot`. Only the caretaker or creator device of the grave may reserve a slot. |
-| `supabase/tests/photo_slot_test.sql` | Five database checks: pending slot, repeat request, conflicting content, stranger device, unknown grave. |
-| `supabase/functions/photo-upload-url/index.ts` | Reserves a slot and returns a signed upload link. 409 means the grave is not synced yet. |
-| `supabase/functions/photo-confirm/index.ts` | Downloads the uploaded bytes, checks the declared size and SHA-256, then marks the photo ready. |
-| `supabase/functions/_shared/device_auth.ts` | Shared helpers: service client, JSON responses, device token check. |
-| `supabase/functions/_shared/photo_validate.ts` | Photo request validation: content type limited to JPEG and PNG, size up to 5 MB, SHA-256 format. |
-| `supabase/functions/_shared/photo_validate.test.ts` | Six unit tests for photo validation. |
-| `supabase/migrations/0004_caretaker_family.sql` | `link_device_caretaker`, `create_caretaker_assignment`, and `publish_condition_report`. |
-| `supabase/tests/caretaker_family_test.sql` | Six database checks: linking, refusing a second user, assignment, report visibility, publish. |
-| `supabase/functions/device-link/index.ts` | Links a signed-in caretaker (Supabase Auth JWT in Authorization) to a device that holds a device token. |
-| `supabase/functions/admin-actions/index.ts` | Admin actions: assign a caretaker to a section, publish a report. Needs `ADMIN_SECRET`. Replaced by the web console later. |
-| `supabase/functions/family-grave/index.ts` | Public read by QR token: name, location in words, ready photos as one-hour links, published reports only. |
-| `supabase/functions/_shared/caretaker_validate.ts` | Validation for device link, family token, and admin actions. |
-| `supabase/functions/_shared/caretaker_validate.test.ts` | Six unit tests for those validators. |
-| `supabase/functions/_shared/admin_auth.ts` | Constant-time secret comparison for admin calls. |
+| `0001_core_tables.sql` | Devices, cemeteries, graves, assignments, reports, outbox log, conflicts, append-only audit log, and RLS. |
+| `0002_sync_push.sql` | Batch sync and per-entity apply functions. Each event runs in its own sub-transaction. |
+| `0003_photos.sql` | Private `grave-photos` bucket, photo metadata, and idempotent slot reservation. |
+| `0004_caretaker_family.sql` | Caretaker device links, section assignments, and report publishing. |
+| `0005_report_by_token.sql` | Allows a report to identify its grave by scanned QR token. |
+| `0006_admin_conflicts.sql` | Audited, idempotent conflict resolution. |
+| `0007_report_accuracy.sql` | Stores report GPS accuracy and preserves the client report ID as the server report ID. |
+| `0008_rate_limits.sql` | Atomic fixed-window rate limits using SHA-256 caller-key hashes. |
 
-| `supabase/migrations/0005_report_by_token.sql` | Condition reports may name the grave by `grave_qr_token`. |
-| `supabase/tests/report_by_token_test.sql` | Two database checks: report by token, unknown token. |
+Application tables enable RLS with no public policies. Functions that require backend access are revoked from public/anon/authenticated roles and granted to `service_role` where applicable. Security-definer functions pin `search_path` to `public`.
 
-Extra environment variable for admin calls: `ADMIN_SECRET`. Set it with `supabase secrets set ADMIN_SECRET=...`.
+## Edge Functions
 
-## Running the checks
+Deploy all seven functions:
 
-Database checks, against a scratch Postgres database:
+- `device-register` — issues a 32-byte device token once; stores only its SHA-256 hash. Limit: 10 requests/hour/IP.
+- `sync-batch` — authenticates the device, validates at most 50 events and a 1 MB body, and calls `sync_push`. Limit: 120 requests/minute/device.
+- `photo-upload-url` — reserves a private photo slot and returns a signed upload URL.
+- `photo-confirm` — verifies stored byte size and SHA-256 before marking a photo ready.
+- `family-grave` — returns public memorial fields, ready photos with one-hour signed links, and published reports only. Limit: 60 requests/minute/IP.
+- `device-link` — verifies the caretaker’s Supabase Auth JWT and links that user to the authenticated device.
+- `admin-actions` — lists cemeteries/reports/conflicts, assigns caretakers, publishes reports, and resolves conflicts. Requires `x-admin-secret` with constant-time comparison.
 
-    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0001_core_tables.sql
-    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0002_sync_push.sql
-    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/sync_push_test.sql
+Shared validators cover UUIDs, QR tokens, entity/operation pairs, versions, note length, JPEG/PNG content types, the 5 MB limit, SHA-256 format, and admin action payloads. Server errors use stable codes and plain messages; internal details stay in server logs.
 
-The test file rolls back at the end, so the scratch database stays clean.
+## Secrets
 
-Validation tests, with Node 18 or later:
+Supabase provides `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to Edge Functions. Set a separate strong admin secret:
 
-    npx tsc --target es2022 --module nodenext --moduleResolution nodenext --strict --rewriteRelativeImportExtensions supabase/functions/_shared/validate.ts supabase/functions/_shared/validate.test.ts
-    node --test supabase/functions/_shared/validate.test.js
+```bash
+supabase secrets set ADMIN_SECRET='REPLACE_WITH_A_LONG_RANDOM_SECRET'
+```
 
-These are the test steps for the sync path. The Deno test runner runs the same file with `deno test`.
+The service-role key and admin secret must never appear in the web build, source control, client logs, or `VITE_` variables. Only the public anon key goes into the app.
 
-## Environment variables for the functions
+## Deployment
 
-| Name | Where it comes from |
+From this `backend/` directory, using the Supabase CLI and your own project:
+
+```bash
+supabase link --project-ref YOUR_PROJECT_REF
+supabase db push
+
+for function in device-register sync-batch photo-upload-url photo-confirm family-grave device-link admin-actions; do
+  supabase functions deploy "$function"
+done
+```
+
+Enable phone Auth and configure an SMS provider that supports the pilot’s numbers. Confirm that the `grave-photos` bucket remains private. Apply migrations before deploying functions that depend on them, especially `0008_rate_limits.sql`.
+
+## Deno checks
+
+From the repository root:
+
+```bash
+npx -y deno check backend/supabase/functions/*/index.ts
+npx -y deno test backend/supabase/functions/_shared/*.test.ts
+```
+
+The validator suite contains 24 tests across sync, photo, caretaker, family-token, and admin validation.
+
+## Postgres 16 integration tests
+
+Use a disposable database. The test files roll back their changes, but migrations do not.
+
+```bash
+export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/graveyard_test
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ../ci/supabase_stubs.sql
+for file in supabase/migrations/*.sql; do
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$file" || exit 1
+done
+for file in supabase/tests/*.sql; do
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$file" || exit 1
+done
+```
+
+`../ci/supabase_stubs.sql` creates only the roles and `storage.buckets` table needed on plain Postgres. Do not apply it to Supabase itself.
+
+| SQL suite | Coverage |
 |---|---|
-| `SUPABASE_URL` | Project settings |
-| `SUPABASE_SERVICE_ROLE_KEY` | Project settings. Stays on the server and never goes in the app. |
+| `sync_push_test.sql` | Create, duplicate event, newer version, stale conflict, unknown entity, QR collision, and audit immutability. |
+| `photo_slot_test.sql` | Pending slot, idempotent repeat, content conflict, unauthorized device, and unknown grave. |
+| `caretaker_family_test.sql` | Device linking, reassignment refusal, missing device, section assignment, report accuracy/privacy, and publishing. |
+| `report_by_token_test.sql` | Report by scanned token and unknown token. |
+| `admin_conflict_test.sql` | Resolution, trimming, audit, repeat behavior, and blank-resolution refusal. |
+| `rate_limit_test.sql` | Allowed requests, over-limit refusal, and separate caller buckets. |
 
-## Notes on what this run covers
-
-The SQL and the validation code were checked by running the validation tests and by reading the SQL. The SQL checks were not run against a Postgres server in this build. Edge Functions were not run under Deno. The mobile sync client and its tests are in `mobile/`.
-
-## Running everything on GitHub
-
-`.github/workflows/ci.yml` at the repo root runs three jobs on every push: Flutter (`pub get`, `analyze`, `test`), SQL (all migrations and all SQL checks on a Postgres 16 service, with `ci/supabase_stubs.sql` standing in for Supabase roles and the storage table), and Deno (`deno check` on every function and `deno test` on the shared validators). Push the contents of this folder as the root of a repository and open the Actions tab.
+The full suite has been run against PostgreSQL 16.4 in this workspace. Live Supabase Auth, Storage signing, Edge Function HTTP integration, and SMS delivery still require a deployed-project check.

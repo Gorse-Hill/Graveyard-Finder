@@ -1,8 +1,6 @@
 -- Sprint 6 entry points: a caretaker scans a QR code, so the phone knows the grave's QR token.
 -- The phone may not hold the grave's server ID, so a condition report may name the grave by grave_id or by grave_qr_token.
 
-alter table public.condition_reports add column if not exists gps_accuracy_m double precision;
-
 create or replace function public.apply_condition_report(p_device uuid, p jsonb)
 returns jsonb
 language plpgsql
@@ -15,10 +13,6 @@ declare
   v_section text;
   v_user uuid;
 begin
-  if exists (select 1 from public.condition_reports where client_report_id = v_report_id) then
-    return jsonb_build_object('result', 'applied', 'reason', 'already_stored');
-  end if;
-
   if p ? 'grave_id' and p->>'grave_id' is not null then
     v_grave_id := (p->>'grave_id')::uuid;
   else
@@ -27,6 +21,10 @@ begin
 
   if v_grave_id is null then
     return jsonb_build_object('result', 'rejected', 'reason', 'grave_not_found');
+  end if;
+
+  if exists (select 1 from public.condition_reports where client_report_id = v_report_id) then
+    return jsonb_build_object('result', 'applied', 'reason', 'already_stored');
   end if;
 
   select cemetery_id, section into v_cemetery, v_section
@@ -58,7 +56,7 @@ begin
 
   insert into public.condition_reports (
     client_report_id, grave_id, device_id, condition, note,
-    gps_lat, gps_lng, gps_accuracy_m, visit_date
+    gps_lat, gps_lng, visit_date
   ) values (
     v_report_id,
     v_grave_id,
@@ -67,7 +65,6 @@ begin
     p->>'note',
     (p->>'gps_lat')::double precision,
     (p->>'gps_lng')::double precision,
-    (p->>'gps_accuracy_m')::double precision,
     (p->>'visit_date')::timestamptz
   );
 

@@ -1,70 +1,103 @@
-# Graveyard Locator
+# Graveyard Finder
 
-Mobile-first app for recording and sharing grave locations in Somaliland (and beyond). Offline-first, with a Family Card QR system and caretaker condition reports.
+An offline-first, installable web app for recording graves, printing Family Cards, reopening family memorials, and queuing caretaker condition reports. The implementation continues the supplied Sprint 6 data model and backend, using the brief’s responsive web/PWA variant.
 
-**Current status:** First implementation slice (Save a Grave, Family Card QR, basic caretaker flow, offline sync queue). Not yet a full MVP. Code has not been compiled or run in the environment where it was generated — build and test locally.
+## What works without a server
 
-## What the MVP will include (from the blueprint)
+- Save a grave name, photo, GPS coordinates and accuracy, and optional section/block/plot in one IndexedDB transaction.
+- Resize JPEG or PNG photos to a 1600 px long edge, calculate SHA-256, and enforce the 5 MB processed-file limit.
+- Generate a 26-character random base32 Family Card token on the device.
+- Display, copy, share, and print a Family Card containing `https://gl.app/g/{token}`.
+- Reopen locally saved memorials and photos while offline, including after a full app reload.
+- Enter a Family Card link manually when a camera is unavailable.
+- Save and inspect queued graves and condition reports.
 
-1. Save a grave without an account: one photo, a name, automatic GPS, offline-first save.
-2. Family Card with a QR code that opens the grave’s memorial.
-3. Steward claim by phone number and one-time code, with approval from the record creator’s device.
-4. Caretaker sign-in, assigned sections, and condition reports (Good / Needs Attention / Serious Damage) with offline queue.
-5. Family view of the memorial and its condition reports.
-6. Acts of Remembrance: paid services (Zaad, e-Dahab, Premier Bank transfer, card, PayPal) with partner proof flow.
-7. Web admin for caretaker approval, flagged reports, and orders.
+Without Supabase configuration, records remain in this browser only. There is no cross-device sync, remote family lookup, real phone OTP, or live admin connection, and the interface says so rather than simulating those services.
 
-## What is in this repository now
+## Routes
 
-- **mobile/** — Flutter app (first slice)
-  - Save a Grave (photo + name + GPS, offline SQLite)
-  - Family Card / QR generation and scanning
-  - Basic caretaker sign-in and condition report flow
-  - Offline sync queue with retry/backoff
-  - English + prepared Somali strings
-- **backend/** — Supabase project
-  - Migrations for core tables, sync, photos, caretaker/family, reports by token
-  - Edge Functions: sync-batch, device-register, photo-upload-url, photo-confirm, device-link, admin-actions, family-grave
-  - Shared validators + unit tests
-  - SQL tests
-- **ci/** — Supabase stubs for local/CI Postgres
-- **.github/workflows/ci.yml** — Flutter analyze/test, SQL migrations + checks on Postgres 16, Deno check + tests
+The static preview uses hash URLs so every route works without server rewrites:
 
-## Stack
+- `#/` — home and locally saved records
+- `#/save` — Save a Grave
+- `#/card/:id` — Family Card
+- `#/find` — scanner and manual Family Card entry
+- `#/g/:token` — family memorial
+- `#/queue` — outbox and retry states
+- `#/caretaker/sign-in` — phone OTP
+- `#/caretaker/report` — condition report
+- `#/admin` — assignments, report publishing, and conflict resolution
 
-- Mobile: Flutter + sqflite
-- Backend: Supabase (Postgres, Auth, Storage, Edge Functions)
-- Planned: React + TypeScript web admin, Firebase Cloud Messaging, Google Maps / Apple Maps, Sentry
+The QR value itself remains the required clean URL, `https://gl.app/g/{token}`. Production hosting for `gl.app` must redirect `/g/{token}` to `/#/g/{token}` (or provide equivalent routing) so the printed link opens this hash-routed build.
 
-## Getting started
+## Local development
 
-### Mobile
+Requirements: Node.js 24 is recommended because the installed ZXing release declares Node 24 or newer. Node 20 also built and passed the automated checks in this workspace, with an engine warning.
 
 ```bash
-cd mobile
-flutter create --platforms=android,ios --project-name graveyard_locator .
-flutter pub get
-flutter analyze
-flutter test
-flutter run
+npm ci
+npm run dev
 ```
 
-Add camera and location permissions to `AndroidManifest.xml` and `Info.plist` (see `mobile/README.md`).
+Open the local URL printed by Vite. Camera and location APIs require localhost or HTTPS and browser permission. For a production-style check:
 
-### Backend / CI
+```bash
+npm run build
+npm run preview
+```
 
-The GitHub Actions workflow runs on every push and pull request. Locally you can apply migrations and tests against a Postgres instance using the files in `backend/supabase/` and `ci/`.
+## Configuration
 
-## Logo
+Copy `.env.example` to `.env.local` and fill in the public values:
 
-Brand mark is in `mobile/assets/logo.png`.
+```dotenv
+VITE_SYNC_URL=https://YOUR_PROJECT_REF.supabase.co/functions/v1
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SYNC_ANON_KEY=YOUR_PUBLIC_ANON_KEY
+```
 
-## Next steps
+Only the public anon key belongs in the app build. Never put the service-role key or admin secret in a `VITE_` variable. Rebuild after changing environment values.
 
-- Generate Flutter platform folders and verify the app builds.
-- Complete steward claim, memorials, Acts of Remembrance payments, and web admin (per blueprint).
-- Move from the current slice to the full repository layout described in the developer blueprint.
+## Supabase deployment
 
----
+The backend is in `backend/`. Apply migrations in filename order, deploy all seven Edge Functions, set the server secrets, and enable phone Auth with an SMS provider that supports the pilot’s Somali numbers. See `backend/README.md` for function-specific commands and tests.
 
-*This repository follows the Graveyard Locator App Blueprint for Developers (Nov 2026).*
+The database enables RLS on application tables with no public policies. Edge Functions use the service role. Photos use the private `grave-photos` bucket and one-hour signed read links.
+
+## Checks
+
+```bash
+npm run lint
+npm test
+npm run build
+npm audit --omit=dev
+
+npx -y deno check backend/supabase/functions/*/index.ts
+npx -y deno test backend/supabase/functions/_shared/*.test.ts
+```
+
+SQL integration tests require a scratch Postgres 16 database, not a production database:
+
+```bash
+export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/graveyard_test
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ci/supabase_stubs.sql
+for file in backend/supabase/migrations/*.sql; do
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$file" || exit 1
+done
+for file in backend/supabase/tests/*.sql; do
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$file" || exit 1
+done
+```
+
+The stub file supplies only the roles and `storage.buckets` table used by migrations on plain Postgres. Supabase provides these itself; do not run the stubs on a real Supabase project. Every SQL test rolls back its own data.
+
+GitHub Actions runs the frontend checks, Deno checks/tests, and the full migration and SQL test suite on Postgres 16. Flutter/Android APK CI is not included because this delivery implements the web/PWA variant.
+
+## Browser and install notes
+
+- Chromium desktop and a 375 px mobile viewport were exercised for local save, Family Card actions, offline reload, manual QR entry, queue states, caretaker report save, and unconfigured service states.
+- The service worker uses network-first pages with an offline app-shell fallback, precached application assets, cached images, and Background Sync where supported. Other browsers retry when the app is open or online state returns.
+- Use the browser’s **Install app** or **Add to Home Screen** command to install the PWA. Publishing and HTTPS hosting are required for installation outside localhost.
+- Real-device rear-camera scanning, GPS accuracy, iOS installation, SMS delivery, and Background Sync behavior still need pilot-device validation.
+
+See `ASSUMPTIONS.md` for product boundaries, operational requirements, and open decisions.

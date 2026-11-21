@@ -5,6 +5,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { MAX_BODY_BYTES, validateBatch } from "../_shared/validate.ts";
+import { enforceRateLimit } from "../_shared/rate_limit.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -56,6 +57,9 @@ Deno.serve(async (req) => {
   if (!device || device.token_hash !== presented) {
     return json({ error: "unauthorized" }, 401);
   }
+
+  const limited = await enforceRateLimit(supabase, req, "sync-batch", 120, 60, device_id);
+  if (limited) return limited;
 
   const { data, error } = await supabase.rpc("sync_push", {
     p_device_id: device_id,
