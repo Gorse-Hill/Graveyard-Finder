@@ -117,3 +117,26 @@ jobs:
           name: graveyard-locator-debug-apk
           path: mobile/build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 30
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Keep the web build for download
+        uses: actions/upload-artifact@v4
+        with:
+          name: graveyard-finder-web
+          path: web/dist
+          retention-days: 30

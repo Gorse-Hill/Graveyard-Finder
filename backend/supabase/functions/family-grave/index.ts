@@ -4,6 +4,7 @@
 // Nothing here returns GPS accuracy, device IDs, or unpublished reports.
 import { json, serviceClient } from "../_shared/device_auth.ts";
 import { validateFamilyToken } from "../_shared/caretaker_validate.ts";
+import { enforceRateLimit } from "../_shared/rate_limit.ts";
 
 const LINK_SECONDS = 3600;
 
@@ -14,6 +15,12 @@ Deno.serve(async (req) => {
   if (!checked.ok) return json({ error: checked.error }, 400);
 
   const supabase = serviceClient();
+  // Mobile carriers put many phones behind one address, so the address limit is generous.
+  // A separate per-token limit slows anyone hammering a single card.
+  const limited = await enforceRateLimit(supabase, req, "family-grave", 600, 60) ??
+    await enforceRateLimit(supabase, req, `family-token:${checked.value}`, 60, 60, checked.value);
+  if (limited) return limited;
+
   const { data: grave, error } = await supabase
     .from("graves")
     .select("id, name, section, block, plot, status, gps_lat, gps_lng")

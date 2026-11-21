@@ -25,7 +25,11 @@ export function validateFamilyToken(token: string | null): Checked<string> {
 
 export type AdminAction =
   | { action: "assign_caretaker"; caretaker_user_id: string; cemetery_id: string; section: string }
-  | { action: "publish_report"; report_id: string };
+  | { action: "publish_report"; report_id: string }
+  | { action: "resolve_conflict"; conflict_id: string; resolution: string }
+  | { action: "list_reports" }
+  | { action: "list_conflicts" }
+  | { action: "list_cemeteries" };
 
 export function validateAdminAction(input: unknown): Checked<AdminAction> {
   if (!isObject(input)) return { ok: false, error: "body_not_object" };
@@ -50,6 +54,25 @@ export function validateAdminAction(input: unknown): Checked<AdminAction> {
   if (input.action === "publish_report") {
     if (!isUuid(input.report_id)) return { ok: false, error: "invalid_report_id" };
     return { ok: true, value: { action: "publish_report", report_id: input.report_id } };
+  }
+
+  if (input.action === "resolve_conflict") {
+    if (!isUuid(input.conflict_id)) return { ok: false, error: "invalid_conflict_id" };
+    if (typeof input.resolution !== "string" || input.resolution.trim().length === 0 || input.resolution.length > 500) {
+      return { ok: false, error: "invalid_resolution" };
+    }
+    return {
+      ok: true,
+      value: {
+        action: "resolve_conflict",
+        conflict_id: input.conflict_id,
+        resolution: input.resolution.trim(),
+      },
+    };
+  }
+
+  if (input.action === "list_reports" || input.action === "list_conflicts" || input.action === "list_cemeteries") {
+    return { ok: true, value: { action: input.action } };
   }
 
   return { ok: false, error: "unsupported_action" };

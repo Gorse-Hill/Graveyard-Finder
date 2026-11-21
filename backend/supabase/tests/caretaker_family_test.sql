@@ -16,7 +16,7 @@ declare
   report2 uuid := '70000000-0000-4000-8000-0000000000b2';
   r jsonb;
   v_status text;
-  v_rid uuid;
+  v_accuracy double precision;
 begin
   insert into public.devices (device_id, token_hash) values (dev, 'h-b1'), (dev2, 'h-b2');
   insert into public.cemeteries (id, name) values (cemetery, 'Test cemetery');
@@ -54,24 +54,27 @@ begin
     'entity_version', 1,
     'payload', jsonb_build_object(
       'client_report_id', report, 'grave_id', grave, 'condition', 'good',
-      'note', 'Tidy', 'gps_lat', 9.5, 'gps_lng', 44.0, 'visit_date', '2026-11-20T09:00:00Z')
+      'note', 'Tidy', 'gps_lat', 9.5, 'gps_lng', 44.0, 'gps_accuracy_m', 6.5,
+      'visit_date', '2026-11-20T09:00:00Z')
   )));
   if r->'results'->0->>'result' <> 'applied' then
     raise exception 'check 4 failed: %', r;
   end if;
 
   -- 5. A report is not visible until it is published.
-  -- The server gives the stored report its own id. The phone's id is client_report_id.
-  select id, status into v_rid, v_status from public.condition_reports where client_report_id = report;
-  if v_status is distinct from 'received' then
+  select status, gps_accuracy_m into v_status, v_accuracy from public.condition_reports where id = report;
+  if v_status <> 'received' then
     raise exception 'check 5 failed: status = %', v_status;
   end if;
-  r := public.publish_condition_report(v_rid);
+  if v_accuracy <> 6.5 then
+    raise exception 'check 5 failed: GPS accuracy = %', v_accuracy;
+  end if;
+  r := public.publish_condition_report(report);
   if r->>'result' <> 'applied' then
     raise exception 'check 5 failed: %', r;
   end if;
-  select status into v_status from public.condition_reports where id = v_rid;
-  if v_status is distinct from 'published' then
+  select status into v_status from public.condition_reports where id = report;
+  if v_status <> 'published' then
     raise exception 'check 5 failed: status after publish = %', v_status;
   end if;
 
