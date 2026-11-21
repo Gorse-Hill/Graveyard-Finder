@@ -101,3 +101,14 @@ GitHub Actions runs the frontend checks, Deno checks/tests, and the full migrati
 - Real-device rear-camera scanning, GPS accuracy, iOS installation, SMS delivery, and Background Sync behavior still need pilot-device validation.
 
 See `ASSUMPTIONS.md` for product boundaries, operational requirements, and open decisions.
+
+## iPhone, Android and Smart TV
+
+- **Android:** open the published link in Chrome, then use Install app. Camera, GPS, QR scanning and background sync work.
+- **iPhone:** open the link in Safari, tap Share, then Add to Home Screen, and open the app from the home screen icon. Records saved in a Safari tab stay in that tab's storage, so install first. Background sync is not available on iPhone, so the app syncs while it is open.
+- **Smart TV (LG webOS, Samsung Tizen, Android TV, Fire TV):** open the link in the TV browser. The app switches to a large-type memorial viewer with a remote-friendly keyboard for the 26-character Family Card code. Arrow keys move between controls, OK selects, Back returns. Add `?tv=1` to the address to force this view on any browser. The build targets Chromium 76 and newer, which covers TVs from about 2020.
+- Recording graves and caretaker reports use the camera and GPS, so those screens are hidden on a TV.
+
+## Publishing
+
+`.github/workflows/pages.yml` builds this folder and publishes it to GitHub Pages on every push to main that touches `web/`. In the repository settings, open Pages and set the source to GitHub Actions. Add the three `VITE_` values as repository variables to connect the live backend.

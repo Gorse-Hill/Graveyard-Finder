@@ -4,7 +4,7 @@ import { ArrowRight, Camera, HeartHandshake, MapPin, QrCode } from 'lucide-react
 import { listGraves, waitingCount } from '../lib/db'
 import type { Grave } from '../types'
 import { locationInWords } from '../lib/domain'
-import { isInstalledApp, isTvBrowser } from '../lib/device'
+import { isInstalledApp, isIosDevice, isTvBrowser } from '../lib/device'
 import { requestPersistentStorage } from '../lib/storage'
 import { Notice } from '../components/PageHeader'
 import { t } from '../lib/strings'
@@ -46,7 +46,7 @@ export default function HomePage() {
       </section>
 
       <section className="task-panel" aria-label={t.mainTasks}>
-        {atRisk && graves.length > 0 && <Notice tone="warning">{t.storageWarning}</Notice>}
+        {atRisk && graves.length > 0 && <Notice tone="warning">{t.storageWarning}{isIosDevice() ? ` ${t.iosInstallHint}` : ''}</Notice>}
         {!tv && <Link to="/save" className="task-link task-primary">
           <span className="task-icon"><Camera size={28} aria-hidden="true" /></span>
           <span><strong>{t.saveGrave}</strong><small>{t.saveGraveIntro}</small></span>

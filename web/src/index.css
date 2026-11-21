@@ -548,3 +548,14 @@ html[data-device="tv"] .task-link,
 html[data-device="tv"] .button { min-height: 4.5rem; }
 html[data-device="tv"] .app-footer { display: none; }
 @media print { .tv-hint { display: none; } }
+
+/* Smart TV keyboard for the Family Card code. */
+.tv-keyboard { display: grid; gap: 1.25rem; margin-top: 1rem; }
+.tv-code-display { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: center; margin: 0; font-family: ui-monospace, monospace; font-size: 1.4rem; }
+.tv-slot { display: inline-flex; width: 2rem; height: 2.6rem; align-items: center; justify-content: center; border-bottom: 3px solid #b9c4bf; }
+.tv-slot.is-filled { border-bottom-color: #123d34; font-weight: 700; }
+.tv-key-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0.5rem; }
+.tv-key { min-height: 3.6rem; border: 2px solid #123d34; border-radius: 10px; background: #fffdf8; color: #123d34; font-size: 1.4rem; font-weight: 700; cursor: pointer; }
+.tv-key:focus { outline: 4px solid #c99a46; outline-offset: 3px; background: #f3e6c8; }
+.tv-key-actions { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+html[data-device="tv"] .tv-key:focus { outline: 4px solid #c99a46; outline-offset: 3px; }

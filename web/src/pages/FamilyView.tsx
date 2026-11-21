@@ -4,6 +4,7 @@ import { CalendarDays, ImageOff, MapPin, Navigation, RefreshCw } from 'lucide-re
 import PageHeader, { Notice } from '../components/PageHeader'
 import { cachedFamily, cachePhotoById, fetchFamily } from '../lib/api'
 import { getGraveByToken, getLocalPhoto } from '../lib/db'
+import { isTvBrowser } from '../lib/device'
 import { conditionLabel, directionsUrl, locationInWords } from '../lib/domain'
 import type { FamilyResponse } from '../types'
 import { t } from '../lib/strings'
@@ -36,6 +37,7 @@ function FamilyPhoto({ id, url, name }: { id: string; url: string; name: string 
 }
 
 export default function FamilyViewPage() {
+  const tv = isTvBrowser()
   const { token = '' } = useParams()
   const [family, setFamily] = useState<FamilyResponse | null>(null)
   const [error, setError] = useState('')
@@ -102,9 +104,9 @@ export default function FamilyViewPage() {
               {family.photos.map((photo) => <FamilyPhoto key={photo.id} id={photo.id} url={photo.url} name={family.name} />)}
             </div>
           )}
-          <a className="button button-primary directions-button" href={directionsUrl(family.coordinates.lat, family.coordinates.lng)} target="_blank" rel="noreferrer">
+          {!tv && <a className="button button-primary directions-button" href={directionsUrl(family.coordinates.lat, family.coordinates.lng)} target="_blank" rel="noreferrer">
             <Navigation size={24} aria-hidden="true" />{t.directions}
-          </a>
+          </a>}
           <p className="coordinates">GPS {family.coordinates.lat.toFixed(6)}, {family.coordinates.lng.toFixed(6)}</p>
           <section className="report-history" aria-labelledby="report-history-title">
             <h2 id="report-history-title">{t.visitReports}</h2>

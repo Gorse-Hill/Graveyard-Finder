@@ -5,6 +5,7 @@ import { waitingCount } from '../lib/db'
 import { syncConfigured } from '../lib/config'
 import { syncNow } from '../lib/sync'
 import { isTvBrowser } from '../lib/device'
+import { installDpad } from '../lib/dpad'
 import { t } from '../lib/strings'
 
 export default function Layout() {
@@ -24,6 +25,8 @@ export default function Layout() {
     })
     return () => { active = false }
   }, [location.pathname])
+
+  useEffect(() => (tv ? installDpad() : undefined), [tv])
 
   useEffect(() => {
     const onOnline = () => {
