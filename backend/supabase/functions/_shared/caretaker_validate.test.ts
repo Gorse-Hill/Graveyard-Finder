@@ -46,6 +46,18 @@ test("publish_report needs a report id", () => {
   });
 });
 
+test("resolve_conflict checks its id and resolution", () => {
+  assert.equal(validateAdminAction({ action: "resolve_conflict", conflict_id: REPORT, resolution: " Kept current " }).ok, true);
+  assert.deepEqual(validateAdminAction({ action: "resolve_conflict", conflict_id: "x", resolution: "Kept current" }), { ok: false, error: "invalid_conflict_id" });
+  assert.deepEqual(validateAdminAction({ action: "resolve_conflict", conflict_id: REPORT, resolution: "  " }), { ok: false, error: "invalid_resolution" });
+});
+
+test("admin list actions are accepted", () => {
+  assert.equal(validateAdminAction({ action: "list_reports" }).ok, true);
+  assert.equal(validateAdminAction({ action: "list_conflicts" }).ok, true);
+  assert.equal(validateAdminAction({ action: "list_cemeteries" }).ok, true);
+});
+
 test("unknown admin actions are refused", () => {
   assert.deepEqual(validateAdminAction({ action: "delete_grave" }), { ok: false, error: "unsupported_action" });
 });

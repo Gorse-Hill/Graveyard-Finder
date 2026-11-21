@@ -6,6 +6,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { isUuid } from "../_shared/validate.ts";
+import { enforceRateLimit } from "../_shared/rate_limit.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -27,6 +28,9 @@ async function sha256Hex(text: string): Promise<string> {
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+
+  const limited = await enforceRateLimit(supabase, req, "device-register", 10, 3600);
+  if (limited) return limited;
 
   let body: unknown;
   try {
