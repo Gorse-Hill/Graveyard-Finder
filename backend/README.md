@@ -51,9 +51,13 @@ From this `backend/` directory, using the Supabase CLI and your own project:
 supabase link --project-ref YOUR_PROJECT_REF
 supabase db push
 
-for function in device-register sync-batch photo-upload-url photo-confirm family-grave device-link admin-actions; do
-  supabase functions deploy "$function"
+# These six check their own device token or admin secret. New Supabase public keys are not JWTs,
+# so the gateway JWT check is switched off for them.
+for function in device-register sync-batch photo-upload-url photo-confirm family-grave admin-actions; do
+  supabase functions deploy "$function" --no-verify-jwt
 done
+# device-link receives the caretaker's signed-in token, so it keeps the gateway check.
+supabase functions deploy device-link
 ```
 
 Enable phone Auth and configure an SMS provider that supports the pilot’s numbers. Confirm that the `grave-photos` bucket remains private. Apply migrations before deploying functions that depend on them, especially `0008_rate_limits.sql`.
