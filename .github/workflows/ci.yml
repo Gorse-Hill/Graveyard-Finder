@@ -107,9 +107,13 @@ jobs:
 
       - run: flutter pub get
 
-      # A release build stops in Android lint inside the image_picker plugin (a crash in lint itself),
-      # so CI builds the debug APK, which compiles the whole app and every plugin.
-      - run: flutter build apk --debug
+      # Connected to the Graveyard Finder Supabase project.
+      # Anon key is the public client key (safe to embed).
+      - name: Build debug APK with Supabase connection
+        run: |
+          flutter build apk --debug \
+            --dart-define=SYNC_URL=https://hqnwsnxwrnveyaztdsjp.supabase.co/functions/v1 \
+            --dart-define=SYNC_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhxbndzbnh3cm52ZXlhenRkc2pwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU1MjAwODIsImV4cCI6MjExMTA5NjA4Mn0.34HIqUriZWJLf5REmwoKkz2S001GuAVMKc7EW6BWU4k
 
       - name: Keep the APK for download
         uses: actions/upload-artifact@v4
