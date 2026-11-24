@@ -50,7 +50,7 @@ export default function Layout() {
       <a className="skip-link" href="#main-content">{t.skipToContent}</a>
       <header className="topbar">
         <Link to="/" className="wordmark" aria-label={`${t.appName}, ${t.home}`}>
-          <span className="wordmark-mark" aria-hidden="true">GF</span>
+          <img className="wordmark-mark" src="./graveyard-finder.webp" alt="" />
           <span>{t.appName}</span>
         </Link>
         <nav className="topbar-nav" aria-label={t.mainNavigation}>

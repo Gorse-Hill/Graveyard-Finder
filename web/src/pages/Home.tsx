@@ -34,7 +34,10 @@ export default function HomePage() {
           </div>
         </div>
         <div className="home-purpose">
-          <p className="overline">{t.appName}</p>
+          <div className="app-brand">
+            <img src="./graveyard-finder.webp" alt={t.graveyardLogoAlt} className="app-brand-logo" />
+            <p className="overline">{t.appName}</p>
+          </div>
           <h1>{t.shortTagline}</h1>
           <p>{t.saveGraveIntro}</p>
           <Link to="/queue" className={`waiting-summary ${waiting ? 'has-waiting' : ''}`}>

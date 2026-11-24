@@ -170,6 +170,7 @@ export const messages = {
   mainTasks: 'Main tasks',
   adminViews: 'Admin views',
   logoAlt: 'Ahmed Gorse Waqaf — Charity and Community Endowment',
+  graveyardLogoAlt: 'Graveyard Finder — green and gold grave marker',
   agTechLogoAlt: 'AG Tech — Building Intelligent Software',
   brandAttribution: 'Develop & Design by AG Tech .. Donated by Ahmed Gorse Waqaf',
   reportStatus: (status: string) => ({
